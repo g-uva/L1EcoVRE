@@ -1,5 +1,14 @@
 # 🌱🌍♻️ JupyterK8sMonitor (GreenDIGIT project)
+
+### Overview
 This is the repository that contains the configuration files for the Helm Zero to Jupyter Kubernetes cluster with Scaphandre. This is an easy way to configure and deploy your application in Kubernetes using Scaphandre and JupyterHub.
+
+*This work is funded from the European Union’s Horizon Europe research and innovation programme through the [GreenDIGIT project](https://greendigit-project.eu/), under the grant agreement No. [101131207](https://cordis.europa.eu/project/id/101131207)*.
+
+<div style="display:flex;align-items:center;width:100%;">
+  <img src="static/EN-Funded-by-the-EU-POS-2.png" alt="EU Logo" width="250px">
+  <img src="static/cropped-GD_logo.png" alt="GreenDIGIT Logo" width="110px" style="margin-right:100px">
+</div>
 
 
 #### Access to server and infrastructure deployment
@@ -106,7 +115,7 @@ ri_site_container_<id>-experiment/
 └── README.md
 ```
 
-#### Infrastructure configuration
+## Infrastructure configuration
 > The reference for the steps come from the official Zero to Jupyter documentation.
 0. Changing permissions (for development).
 ```sh
@@ -120,32 +129,42 @@ sudo chown -R $(whoami):$(whoami) ~ # Extending the automatic reading/writing ac
 
 1. Install Helm.
 2. Install Kubernetes and `kubectl`.
+3. Install Minikube.
 ```sh
 # We're using minikube as the Kubernetes managed environment.
-# The port range must be allowed from the API Server control, in order to expose thee individual ports from users.
+# The port range must be allowed from the API Server control, in order to expose the individual ports from users.
 minikube start --extra-config=apiserver.service-node-port-range=9091-9100,30000-32767
+# minikube start \
+#   --driver=docker \
+#   --cpus=4 --memory=6g \
+#   --extra-config=apiserver.service-node-port-range=9091-9100,30000-32767
+
 ```
-3. Install all the repositories from Helm using the `yaml` files. There are two main flavours that we can choose from:
+4. Install all the repositories from Helm using the `yaml` files. There are two main flavours that we can choose from:
     1. `/home/goncalo/jupyterhub-scaphandre-monitor/jhub-config.yaml`: configuration for Spawner with Scaphandre sidecar.
     2. `/home/goncalo/jupyterhub-scaphandre-monitor/jhub-config-local.yaml`: configuration for Scaphandre to be installed locally.
 ```sh
 # -------------
 # JupyterHub chart installation.
 # -------------
+helm repo add jupyterhub https://jupyterhub.github.io/helm-chart/
+helm repo update
 helm install jhub jupyterhub/jupyterhub \
--n jhub --create-namespace \
---values ./jhub-config-local.yaml # Point to the configuration file for JupyterHub.
+  -n jhub --create-namespace \
+  --values ./jhub-config-local.yaml # Point to the configuration file for JupyterHub.
 
 # -------------
 # Monitoring (Prometheus + Grafana) chart installation.
 # -------------
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
 helm install monitoring prometheus-community/kube-prometheus-stack \
--n monitoring --create-namespace \
---values ./monitoring-config.yaml # Point to the configuration file for Monitoring.
+  -n monitoring --create-namespace \
+  --values ./monitoring-config.yaml # Point to the configuration file for Monitoring.
 
 # Update any repository (in case the YAML file is changed).
 # Note: replace the namespace and repository accordingly.
-helm upgrade --install jhub jupyterhub/jupyterhub -n jhub --values ./jhub-config.yaml
+helm upgrade --install jhub jupyterhub/jupyterhub -n jhub --values ./jhub-config-local.yaml
 
 # Port-binding for a permanent port-forward, not terminal dependency
 # 1. The "typical" way would be:
@@ -158,23 +177,23 @@ kubectl -n jhub patch svc proxy-public \
   -p '{"spec":{"externalIPs":["192.168.49.2"]}}'
 
 # Setting the password secret: `hub-password-secret` is recognised by JupyterHub automatically.
-kubectl create secret generic hub-password-secret -n jhub --from-literal=password='<password_ofyourown>'
+kubectl create secret generic hub-password-secret -n jhub --from-literal=password='<your_password>'
 
 # For PVC prepopulated files.
 kubectl create configmap starter-notebook \
-  --from-file=GD_EcoJupyter_Tutorial.ipynb=/home/goncalo/jhub-helm-config/tutorial-notebook/GD_EcoJupyter_Tutorial.ipynb \
+  --from-file=GD_EcoJupyter_Tutorial.ipynb=/home/ubuntu/JupyterK8sMonitor/tutorial-notebook/GD_EcoJupyter_Tutorial.ipynb \
   -n jhub
 
 kubectl create configmap stress-notebook \
-  --from-file=GD_EcoJupyter_Tutorial.ipynb=/home/goncalo/jhub-helm-config/tutorial-notebook/GD_EcoJupyter_StressTest.ipynb \
+  --from-file=GD_EcoJupyter_Tutorial.ipynb=/home/ubuntu/JupyterK8sMonitor/tutorial-notebook/GD_EcoJupyter_StressTest.ipynb \
   -n jhub
 
 kubectl create configmap track-notebook \
-  --from-file=notebook_tracker_experimentid.py=/home/goncalo/jhub-helm-config/configmap-track-experiment-service/notebook_tracker_experimentid.py \
+  --from-file=notebook_tracker_experimentid.py=/home/ubuntu/JupyterK8sMonitor/configmap-track-experiment-service/notebook_tracker_experimentid.py \
   -n jhub
 
 # kubectl create configmap shashikant-notebook-example \
-#   --from-folder=shashikant-notebook-example=/home/goncalo/jhub-helm-config/shashikant-notebook/ \
+#   --from-folder=shashikant-notebook-example=/home/ubuntu/JupyterK8sMonitor/shashikant-notebook/ \
 #   -n jhub
 
 # To restart the deployment rollout (in case some changes need to be propagated)
