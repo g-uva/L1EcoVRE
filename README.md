@@ -1,4 +1,4 @@
-# 🌱🌍♻️ L1EcoVRE (GreenDIGIT project)
+# 🌱🌍♻️ L1EcoVRE (a [GreenDIGIT](https://greendigit-project.eu/) project)
 
 ### Overview
 This is the repository that contains the configuration files for the Helm Zero to Jupyter Kubernetes cluster with Scaphandre. This is an easy way to configure and deploy your application in Kubernetes using Scaphandre and JupyterHub for RI managers, which offer energy and sustainable metrics that integrate natively with [EcoJupyter](https://github.com/g-uva/EcoJupyter).
