@@ -1,13 +1,13 @@
-# 🌱🌍♻️ JupyterK8sMonitor (GreenDIGIT project)
-This is the repository that contains the configuration files for the Helm Zero to Jupyter Kubernetes cluster with Scaphandre. This is an easy way to configure and deploy your application in Kubernetes using Scaphandre and JupyterHub.
+# 🌱🌍♻️ L1EcoVRE (GreenDIGIT project)
+This is the repository that contains the configuration files for the Helm Zero to Jupyter Kubernetes cluster with Scaphandre. This is an easy way to configure and deploy your application in Kubernetes using Scaphandre and JupyterHub for RI managers, which offer energy and sustainable metrics that integrate natively with [EcoJupyter](https://github.com/g-uva/EcoJupyter).
 
 
 #### Access to server and infrastructure deployment
-This is a configuration is deployed at the server: https://mc-a4.lab.uvalight.net/.
+This is a configuration is deployed at the server: https://greendigit-ecojupyter.sztaki.hu//.
 > If you want to have access to the server (filesystem and others), please contact g.j.teixeiradepinhoferreira@uva.nl.
 
 ### Usage
-If you have access to access to the [deployment server](https://mc-a4.lab.uvalight.net), then you just need to follow these steps:
+If you have access to access to the [deployment server](https://greendigit-ecojupyter.sztaki.hu/), then you just need to follow these steps:
 1. Install and run Scaphandre and Prometheus.
 2. *Run your workflow.*
 3. Export CSV metrics (and download them).
