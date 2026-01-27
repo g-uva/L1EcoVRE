@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # 🌱🌍♻️ L1EcoVRE (GreenDIGIT project)
 
 ### Overview
