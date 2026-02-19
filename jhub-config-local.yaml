@@ -28,7 +28,16 @@ hub:
         - enol
     JupyterHub:
       authenticator_class: dummy
+  extraEnv:
+    JHUB_PASSWORD:
+      valueFrom:
+        secretKeyRef:
+          name: hub-password-secret
+          key: password
   extraConfig:
+    00-dummy-password: |
+      import os
+      c.DummyAuthenticator.password = os.environ["JHUB_PASSWORD"]
     enable-api-accces: |
       c.KubeSpawner.automount_serviceaccount_token = True
     allow-root: |

@@ -100,11 +100,11 @@ sudo -E python3 /home/jovyan/scripts/package_metrics.py
 ri_site_container_<id>-experiment/  
 ├── ro-crate-metadata.json # (FAIR metadata + sustainability extensions)  
 ├── data/
-│      ├── <id>_metrics.csv
+│  │   ├── <id>_metrics.csv
 │  ├── output/
-│      └── workflow_output_files/  
+│  │   └── workflow_output_files/  
 │  ├── input/
-│      └── workflow_input_files/
+│  │   └── workflow_input_files/
 │  └── logs/
 │      └── energy_log.json  
 ├── executed/  
@@ -177,7 +177,11 @@ kubectl -n jhub patch svc proxy-public \
   -p '{"spec":{"externalIPs":["192.168.49.2"]}}'
 
 # Setting the password secret: `hub-password-secret` is recognised by JupyterHub automatically.
-kubectl create secret generic hub-password-secret -n jhub --from-literal=password='<your_password>'
+# We assume that JHUB_PASSWORD is set in .env
+set -a
+source .env
+set +a
+kubectl create secret generic hub-password-secret -n jhub --from-literal=password=$JHUB_PASSWORD
 
 # For PVC prepopulated files.
 kubectl create configmap starter-notebook \
