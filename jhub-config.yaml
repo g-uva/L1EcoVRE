@@ -26,6 +26,8 @@ hub:
             ])
     JupyterHub:
       baseUrl: "/jupyter"
+      template_vars:
+        announcement_login: 'If you do not have credentials to log in, please contact <a href="mailto:g.j.teixeiradepinhoferreira@uva.nl">g.j.teixeiradepinhoferreira@uva.nl</a>.'
       tornado_settings:
         xheaders: true
     JupyterHubCuller:
@@ -122,4 +124,3 @@ singleuser:
   extraEnv:
     GRANT_SUDO: "1"
     NOTEBOOK_ARGS: "--allow-root"
-

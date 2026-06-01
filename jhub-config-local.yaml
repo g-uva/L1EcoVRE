@@ -38,6 +38,14 @@ hub:
     00-dummy-password: |
       import os
       c.DummyAuthenticator.password = os.environ["JHUB_PASSWORD"]
+    01-login-announcement: |
+      c.JupyterHub.template_vars = {
+          "announcement_login": (
+              'If you do not have credentials to log in, please contact '
+              '<a href="mailto:g.j.teixeiradepinhoferreira@uva.nl">'
+              'g.j.teixeiradepinhoferreira@uva.nl</a>.'
+          )
+      }
     enable-api-accces: |
       c.KubeSpawner.automount_serviceaccount_token = True
     allow-root: |
