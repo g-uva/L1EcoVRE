@@ -14,6 +14,9 @@ hub:
       timeout: 3600 # 1 hour
       every: 6000 # 10 minutes
       concurrency: 10
+    Spawner:
+      http_timeout: 180
+      start_timeout: 300
     Authenticator:
       admin_users:
         - shashikant
@@ -74,6 +77,9 @@ singleuser:
   extraEnv:
     GRANT_SUDO: "yes"
     NOTEBOOK_ARGS: "--allow-root"
+    PYTHONUSERBASE: "/home/jovyan/.local"
+    PIP_CACHE_DIR: "/home/jovyan/.cache/pip"
+    PIP_CONFIG_FILE: "/home/jovyan/.config/pip/pip.conf"
     # JUPYTER_ALLOW_ORIGIN: "*"
     # JUPYTER_ENABLE_LAB: "yes"
     # JUPYTER_TOKEN: ""
@@ -88,15 +94,38 @@ singleuser:
     - |
       sudo apt update && sudo apt install -y jq
 
+      export PYTHONUSERBASE=/home/jovyan/.local
+      export PIP_CACHE_DIR=/home/jovyan/.cache/pip
+      export PIP_CONFIG_FILE=/home/jovyan/.config/pip/pip.conf
+      export PATH=/home/jovyan/.local/bin:/home/jovyan/.bin:/home/jovyan/.cargo/bin:$PATH
+
+      mkdir -p /home/jovyan/.local/bin /home/jovyan/.cache/pip /home/jovyan/.config/pip
+      chown -R jovyan:users /home/jovyan/.local /home/jovyan/.cache /home/jovyan/.config
+      printf '%s\n' \
+        '[global]' \
+        'user = true' \
+        'cache-dir = /home/jovyan/.cache/pip' \
+        > /home/jovyan/.config/pip/pip.conf
+      chown jovyan:users /home/jovyan/.config/pip/pip.conf
+
+      printf '%s\n' \
+        'export PYTHONUSERBASE=/home/jovyan/.local' \
+        'export PIP_CACHE_DIR=/home/jovyan/.cache/pip' \
+        'export PIP_CONFIG_FILE=/home/jovyan/.config/pip/pip.conf' \
+        'export PATH=/home/jovyan/.local/bin:/home/jovyan/.bin:/home/jovyan/.cargo/bin:$PATH' \
+        > /etc/profile.d/jovyan-persistent-python.sh
+
       if [ ! -f /home/jovyan/GD_EcoJupyter_Tutorial.ipynb ]; then
         cp /srv/starter-notebooks/GD_EcoJupyter_Tutorial.ipynb /home/jovyan/GD_EcoJupyter_Tutorial.ipynb
       fi
       chmod 777 /home/jovyan/GD_EcoJupyter_Tutorial.ipynb
 
-      if [ ! -f /home/jovyan/GD_EcoJupyter_StressTest.ipynb ]; then
+      if [ ! -f /home/jovyan/GD_EcoJupyter_StressTest.ipynb ] && [ -f /srv/stress-notebook/GD_EcoJupyter_StressTest.ipynb ]; then
         cp /srv/stress-notebook/GD_EcoJupyter_StressTest.ipynb /home/jovyan/GD_EcoJupyter_StressTest.ipynb
       fi
-      chmod 777 /home/jovyan/GD_EcoJupyter_StressTest.ipynb
+      if [ -f /home/jovyan/GD_EcoJupyter_StressTest.ipynb ]; then
+        chmod 777 /home/jovyan/GD_EcoJupyter_StressTest.ipynb
+      fi
 
       if [ ! -d /usr/local/etc/jupyter ]; then
         mkdir -p /usr/local/etc/jupyter
@@ -112,19 +141,37 @@ singleuser:
         echo "import notebook_tracker_experimentid" >> /usr/local/etc/jupyter/jupyter_server_config.py
       fi
 
-      # For the notebook tracker
-      pip install prometheus_api_client
+      # Keep Python packages on the user's persistent PVC.
+      sudo -E -u jovyan /opt/conda/bin/python - <<'PY'
+      import importlib.util
+      import subprocess
+      import sys
+
+      packages = [
+          ("ecojupyter", "ecojupyter"),
+          ("prometheus_api_client", "prometheus_api_client"),
+      ]
+      missing = [package for module, package in packages if importlib.util.find_spec(module) is None]
+      if missing:
+          subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", *missing])
+      PY
 
       # Create experiment logs directory
       mkdir -p /home/jovyan/experiment_logs
       chmod 777 /home/jovyan/experiment_logs
 
-      git clone https://github.com/g-uva/egi-ice-net-example.git /home/jovyan/icenet-notebook
-      chmod -R 777 /home/jovyan/icenet-notebook
-      chmod +x /home/jovyan/icenet-notebook/install-dependencies.sh
+      if [ ! -d /home/jovyan/icenet-notebook ]; then
+        git clone https://github.com/g-uva/egi-ice-net-example.git /home/jovyan/icenet-notebook
+      fi
+      if [ -d /home/jovyan/icenet-notebook ]; then
+        chmod -R 777 /home/jovyan/icenet-notebook
+      fi
+      if [ -f /home/jovyan/icenet-notebook/install-dependencies.sh ]; then
+        chmod +x /home/jovyan/icenet-notebook/install-dependencies.sh
+      fi
       git config --global --add safe.directory /home/jovyan/icenet-notebook
 
-      if [ ! -d /home/jovyan/shashikant-notebook/ ]; then
+      if [ ! -d /home/jovyan/shashikant-notebook/ ] && [ -d /srv/shashikant-notebook/ ]; then
         mkdir -p /home/jovyan/
         cp -r /srv/shashikant-notebook/ /home/jovyan/shashikant-notebook
       fi
