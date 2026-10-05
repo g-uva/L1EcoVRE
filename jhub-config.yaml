@@ -153,7 +153,6 @@ singleuser:
       import sys
 
       packages = [
-          ("ecojupyter", "ecojupyter"),
           ("prometheus_api_client", "prometheus_api_client"),
       ]
       missing = [package for module, package in packages if importlib.util.find_spec(module) is None]

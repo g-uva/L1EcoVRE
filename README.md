@@ -25,13 +25,12 @@ If you have access to access to the [deployment server](https://greendigit-ecoju
 
 #### 1. Install and run Scaphandre, Prometheus, and Grafana.
 To install Scaphandre and Prometheus, you just need to copy and run this command on your notebook terminal.
-**Please note that this process takes a while, as we're installing both Scaphandre and Prometheus services.**
+The installer downloads prebuilt binaries, checks their checksums, and prevents concurrent installations. Output is saved to `~/.bin/telemetry-install.log`.
 ```sh
-curl -O https://raw.githubusercontent.com/g-uva/jupyterhub-scaphandre-monitor/refs/heads/master/scaphandre-prometheus-ownpod/install-scaphandre-prometheus.sh
-chmod +x install-scaphandre-prometheus.sh
-./install-scaphandre-prometheus.sh
-sudo rm -rf ./install-scaphandre-prometheus.sh
+bash /srv/telemetry-installer/install.sh
 ```
+
+The local configuration also applies this installer to the Jupyter VRE Workflow **Install Telemetry** button. Scaphandre requires RAPL energy counters. On a VM without these counters, installation reports that energy telemetry is unavailable; Prometheus still runs. VM energy measurements require Scaphandre on the physical hypervisor and its exported `/var/scaphandre` data, with guest Scaphandre configured using `--vm`. Retrying installation cannot create hardware counters.
 
 <!-- Additionally, install and serve Grafana at `:3000` with the following script:
 ```sh
@@ -52,13 +51,25 @@ sudo grafana-server --homepath=/usr/share/grafana --config=/etc/grafana/grafana.
 
 #### 2. Run your workflow (notebook examples)
 ##### 2.1 IceNet notebook example
-Run the following command:
+The local Hub configuration clones this example into `/home/jovyan/icenet-notebook`,
+but cloning does not install its dependencies. Before starting an experiment, run
+these commands in the JupyterLab terminal (the example requires Python 3.9–3.11):
 ```sh
-git clone https://github.com/g-uva/egi-ice-net-example.git
-cd egi-ice-net-example
-chmod +x install-dependencies.sh
-./install-dependencies.sh
+if [ ! -d /home/jovyan/icenet-notebook ]; then
+  git clone https://github.com/g-uva/egi-ice-net-example.git /home/jovyan/icenet-notebook
+fi
+sudo apt-get update
+sudo apt-get install -y --no-install-recommends libhdf5-dev libnetcdf-dev libudunits2-0
+/opt/conda/bin/python -m pip install --user -r /home/jovyan/icenet-notebook/requirements.txt 'tensorflow-probability==0.23.0'
 ```
+
+Using the kernel's Python interpreter installs the packages into the persistent
+`/home/jovyan/.local` directory. After installation, restart the notebook kernel
+and verify `import tensorflow, icenet, xarray` before clicking **Restart experiment**
+in Jupyter VRE Workflow. TensorFlow Probability 0.23 matches the example's
+TensorFlow 2.15 dependency; newer Probability releases require newer TensorFlow.
+Native libraries installed with `apt-get` need to be
+installed again if the user pod is recreated.
 
 ##### 2.2 Other notebooks (WIP)
 - [Workflow 1](https://github.com/shashikantilager/data-center-characterization) *(Just for reference, please read the instructions to put the data into the `/data/...` folder).*
@@ -116,6 +127,71 @@ ri_site_container_<id>-experiment/
 ```
 
 ## Infrastructure configuration
+
+### Full reset and rebuild on gd4
+
+Run this entire snippet in **Bash on the gd4 host**, outside Jupyter. Docker, Minikube, kubectl, and Helm must already be installed, and `.env` must contain `JHUB_PASSWORD`.
+
+**This deletes the Minikube cluster and its notebook volumes, including user files and installed packages. Back up anything you need first.** The host's existing swap configuration remains in place.
+
+```bash
+(
+set -euo pipefail
+cd /home/goncalo/L1EcoVRE
+
+set -a
+source .env
+set +a
+: "${JHUB_PASSWORD:?Set JHUB_PASSWORD in .env before rebuilding}"
+
+minikube delete -p minikube
+
+minikube start -p minikube \
+  --driver=docker --cpus=2 --memory=2560 \
+  --extra-config=apiserver.service-node-port-range=9091-32767
+
+docker update --memory 2560m --memory-swap 3584m minikube
+
+kubectl create namespace jhub
+
+kubectl create secret generic hub-password-secret -n jhub \
+  --from-literal=password="$JHUB_PASSWORD"
+
+kubectl create configmap telemetry-installer -n jhub \
+  --from-file=telemetry-installer/install.sh \
+  --from-file=telemetry-installer/safe_telemetry.py
+
+kubectl create configmap starter-notebook -n jhub \
+  --from-file=tutorial-notebook/GD_EcoJupyter_Tutorial.ipynb
+
+kubectl create configmap stress-notebook -n jhub \
+  --from-file=tutorial-notebook/GD_EcoJupyter_StressTest.ipynb
+
+kubectl create configmap track-notebook -n jhub \
+  --from-file=configmap-track-experiment-service/notebook_tracker_experimentid.py
+
+helm repo add jupyterhub https://jupyterhub.github.io/helm-chart/
+helm repo update
+
+helm upgrade --install jhub jupyterhub/jupyterhub \
+  -n jhub --version 4.4.2 \
+  --values jhub-config-local.yaml \
+  --wait --timeout 5m
+
+kubectl -n jhub patch svc proxy-public --type=merge \
+  -p "{\"spec\":{\"externalIPs\":[\"$(minikube ip -p minikube)\"]}}"
+
+kubectl apply -f dynamic-nodeport-service/dynamic-nodeport-service.yaml
+
+kubectl get nodes
+kubectl get pods -A
+)
+```
+
+Then reopen JupyterHub and log in. Your notebook home will be fresh; install `jupyter-vre-workflow` again and restart your Jupyter server before using its telemetry button. Rebuilding does not supply the VM's missing energy counters.
+
+### General infrastructure setup
+
 > The reference for the steps come from the official Zero to Jupyter documentation.
 0. Changing permissions (for development).
 ```sh
@@ -127,13 +203,17 @@ ls -ld ~ # Pointing to the /home/user/ root.
 sudo chown -R $(whoami):$(whoami) ~ # Extending the automatic reading/writing access rights to the home folder.
 ```
 
-1. Install Helm.
-2. Install Kubernetes and `kubectl`.
-3. Install Minikube.
+1. Install Docker.
+2. Install Helm.
+3. Install Kubernetes and `kubectl`.
+4. Install Minikube.
 ```sh
 # We're using minikube as the Kubernetes managed environment.
 # The port range must be allowed from the API Server control, in order to expose the individual ports from users.
-minikube start --extra-config=apiserver.service-node-port-range=9091-9100,30000-32767
+
+# minikube start --extra-config=apiserver.service-node-port-range=9091-9100,30000-32767
+minikube start --extra-config=apiserver.service-node-port-range=9091-32767
+
 # minikube start \
 #   --driver=docker \
 #   --cpus=4 --memory=6g \
@@ -147,6 +227,11 @@ minikube start --extra-config=apiserver.service-node-port-range=9091-9100,30000-
 # -------------
 # JupyterHub chart installation.
 # -------------
+kubectl create namespace jhub --dry-run=client -o yaml | kubectl apply -f -
+kubectl create configmap telemetry-installer -n jhub \
+  --from-file=telemetry-installer/install.sh \
+  --from-file=telemetry-installer/safe_telemetry.py \
+  --dry-run=client -o yaml | kubectl apply -f -
 helm repo add jupyterhub https://jupyterhub.github.io/helm-chart/
 helm repo update
 helm install jhub jupyterhub/jupyterhub \

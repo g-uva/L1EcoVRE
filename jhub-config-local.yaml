@@ -4,11 +4,6 @@ proxy:
 
 hub:
   config:
-    JupyterHub:
-      baseUrl: "/jupyter"
-      tornado_settings:
-        xheaders: true
-
     JupyterHubCuller:
       enabled: true
       timeout: 3600 # 1 hour
@@ -18,19 +13,34 @@ hub:
       http_timeout: 180
       start_timeout: 300
     Authenticator:
-      admin_users:
+      admin_users: &admin_users
         - shashikant
         - yuri
         - adnan
-        - quint
         - goncalo
-        - ana
-        - kilian
-        - edouard
-        - massimiliano
-        - enol
+      # Demo accounts use the existing shared password, without Hub admin rights.
+      allow_all: false
+      allow_existing_users: false
+      allowed_users:
+        - shashikant
+        - yuri
+        - adnan
+        - goncalo
+        - user-1
+        - user-2
+        - user-3
+        - user-4
+        - user-5
+        - user-6
     JupyterHub:
       authenticator_class: dummy
+      base_url: "/"
+      tornado_settings:
+        xheaders: true
+      # Revoke any admin role retained by users removed from admin_users.
+      load_roles:
+        - name: admin
+          users: *admin_users
   extraEnv:
     JHUB_PASSWORD:
       valueFrom:
@@ -70,6 +80,13 @@ hub:
     #   c.NotebookApp.disable_check_xsrf = True
 
 singleuser:
+  # Leave room for the control plane on the small gd4 host.
+  memory:
+    guarantee: 512M
+    limit: 1280M
+  cpu:
+    guarantee: 0.1
+    limit: 1
   image:
     name: jupyter/datascience-notebook
     tag: latest
@@ -80,6 +97,7 @@ singleuser:
     PYTHONUSERBASE: "/home/jovyan/.local"
     PIP_CACHE_DIR: "/home/jovyan/.cache/pip"
     PIP_CONFIG_FILE: "/home/jovyan/.config/pip/pip.conf"
+    CARGO_BUILD_JOBS: "1"
     # JUPYTER_ALLOW_ORIGIN: "*"
     # JUPYTER_ENABLE_LAB: "yes"
     # JUPYTER_TOKEN: ""
@@ -141,6 +159,12 @@ singleuser:
         echo "import notebook_tracker_experimentid" >> /usr/local/etc/jupyter/jupyter_server_config.py
       fi
 
+      # Apply the prebuilt installer override before server extensions load.
+      if ! grep -q "import safe_telemetry" /usr/local/etc/jupyter/jupyter_server_config.py 2>/dev/null; then
+        printf '%s\n' "import sys" "sys.path.insert(0, '/srv/telemetry-installer')" \
+          "import safe_telemetry" >> /usr/local/etc/jupyter/jupyter_server_config.py
+      fi
+
       # Keep Python packages on the user's persistent PVC.
       sudo -E -u jovyan /opt/conda/bin/python - <<'PY'
       import importlib.util
@@ -148,7 +172,6 @@ singleuser:
       import sys
 
       packages = [
-          ("ecojupyter", "ecojupyter"),
           ("prometheus_api_client", "prometheus_api_client"),
       ]
       missing = [package for module, package in packages if importlib.util.find_spec(module) is None]
@@ -196,6 +219,9 @@ singleuser:
     #     - ReadWriteOnce
 
     extraVolumes:
+      - name: telemetry-installer
+        configMap:
+          name: telemetry-installer
       - name: sys
         hostPath:
           path: /sys
@@ -217,6 +243,9 @@ singleuser:
       #     name: shashikant-notebook
 
     extraVolumeMounts:
+      - name: telemetry-installer
+        mountPath: /srv/telemetry-installer
+        readOnly: true
       - name: sys
         mountPath: /sys
         readOnly: true

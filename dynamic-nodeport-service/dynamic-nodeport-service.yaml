@@ -46,13 +46,13 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: prometheus-quint
+  name: prometheus-user-1
   namespace: jhub
 spec:
   type: NodePort
   selector:
     app: jupyterhub
-    hub.jupyter.org/username: quint
+    hub.jupyter.org/username: user-1
   ports:
     - port: 9090
       targetPort: 9090
@@ -76,13 +76,13 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: prometheus-ana
+  name: prometheus-user-2
   namespace: jhub
 spec:
   type: NodePort
   selector:
     app: jupyterhub
-    hub.jupyter.org/username: ana
+    hub.jupyter.org/username: user-2
   ports:
     - port: 9090
       targetPort: 9090
@@ -91,13 +91,13 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: prometheus-kilian
+  name: prometheus-user-3
   namespace: jhub
 spec:
   type: NodePort
   selector:
     app: jupyterhub
-    hub.jupyter.org/username: kilian
+    hub.jupyter.org/username: user-3
   ports:
     - port: 9090
       targetPort: 9090
@@ -106,13 +106,13 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: prometheus-edouard
+  name: prometheus-user-4
   namespace: jhub
 spec:
   type: NodePort
   selector:
     app: jupyterhub
-    hub.jupyter.org/username: edouard
+    hub.jupyter.org/username: user-4
   ports:
     - port: 9090
       targetPort: 9090
@@ -121,13 +121,13 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: prometheus-massimiliano
+  name: prometheus-user-5
   namespace: jhub
 spec:
   type: NodePort
   selector:
     app: jupyterhub
-    hub.jupyter.org/username: massimiliano
+    hub.jupyter.org/username: user-5
   ports:
     - port: 9090
       targetPort: 9090
@@ -136,13 +136,13 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: prometheus-enol
+  name: prometheus-user-6
   namespace: jhub
 spec:
   type: NodePort
   selector:
     app: jupyterhub
-    hub.jupyter.org/username: enol
+    hub.jupyter.org/username: user-6
   ports:
     - port: 9090
       targetPort: 9090
