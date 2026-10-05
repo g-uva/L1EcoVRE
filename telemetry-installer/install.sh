@@ -72,8 +72,9 @@ for attempt in $(seq 1 30); do
   sleep 1
 done
 curl -fsS --max-time 2 http://localhost:9090/-/ready >/dev/null
-if ! find /sys/class/powercap -name energy_uj -print -quit 2>/dev/null | grep -q .; then
-  echo 'Binaries installed; Prometheus started. Energy telemetry is unavailable: this VM exposes no RAPL energy counters.'
+if ! find -L /sys/class/powercap -name energy_uj -print -quit 2>/dev/null | grep -q .; then
+  echo 'Binaries installed; Prometheus started. Energy telemetry is unavailable: no RAPL energy counters are visible under /sys/class/powercap.'
+  echo 'Check the host RAPL kernel modules and /sys mounts; an accessible powercap directory can still be empty.'
   echo 'Scaphandre needs physical-host RAPL counters or hypervisor-provided /var/scaphandre data with --vm. Installing again cannot add these counters.'
   exit 1
 fi

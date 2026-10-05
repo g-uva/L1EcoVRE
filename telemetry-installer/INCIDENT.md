@@ -14,4 +14,17 @@ Separate hardware limitation: `/sys/class/powercap` exposes no energy counters o
 
 Notebook logs: `~/.bin/telemetry-install.log`, `~/.bin/prometheus.log`, `~/.bin/scaphandre.log`.
 
+Follow-up counter diagnosis on gd4: the earlier repository changes enabled
+privileged notebook access and mounted the complete `/sys` tree; these settings
+remain active. `/sys/class/powercap` was empty on gd4, the Minikube node, and the
+notebook pod, including when checked with `find -L` to follow powercap symlinks.
+The running kernel lacked `linux-modules-extra-6.8.0-137-generic`. Installing it
+and loading `intel_rapl_msr` successfully loaded both RAPL modules, but did not
+create any energy counters. Read-only probes of AMD RAPL units (MSR 0xC0010299)
+and package energy (MSR 0xC001029B) returned EIO. gd4 is a KVM guest with an AMD
+EPYC-Genoa virtual CPU, and no `/var/scaphandre` guest export exists. The evidence
+points to missing hypervisor-provided energy access, rather than notebook
+permissions. The installer detection now follows sysfs symlinks to avoid false
+negatives on hosts that do provide counters.
+
 Saved pre-recovery server logs on gd4 are under `/var/lib/docker/volumes/minikube/_data/log/pods/jhub_jupyter-goncalo_059a827c-0f93-44ca-a2b4-b2f4bc535fe2/notebook/` (root access required). VS Code's ptyhost log recorded terminal replay metadata, but did not expose the terminal's complete scrollback to this agent.
