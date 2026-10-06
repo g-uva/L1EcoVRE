@@ -51,25 +51,22 @@ sudo grafana-server --homepath=/usr/share/grafana --config=/etc/grafana/grafana.
 
 #### 2. Run your workflow (notebook examples)
 ##### 2.1 IceNet notebook example
-The local Hub configuration clones this example into `/home/jovyan/icenet-notebook`,
-but cloning does not install its dependencies. Before starting an experiment, run
-these commands in the JupyterLab terminal (the example requires Python 3.9–3.11):
-```sh
-if [ ! -d /home/jovyan/icenet-notebook ]; then
-  git clone https://github.com/g-uva/egi-ice-net-example.git /home/jovyan/icenet-notebook
-fi
-sudo apt-get update
-sudo apt-get install -y --no-install-recommends libhdf5-dev libnetcdf-dev libudunits2-0
-/opt/conda/bin/python -m pip install --user -r /home/jovyan/icenet-notebook/requirements.txt 'tensorflow-probability==0.23.0'
-```
+The local Hub configuration prepares `/home/jovyan/icenet-notebook` before
+starting JupyterLab. It installs the native libraries and the example's Python
+requirements automatically, including TensorFlow Probability 0.23 for TensorFlow
+2.15 and the Jupyter VRE Workflow extension. No terminal installation is needed before clicking **Restart experiment**.
 
-Using the kernel's Python interpreter installs the packages into the persistent
-`/home/jovyan/.local` directory. After installation, restart the notebook kernel
-and verify `import tensorflow, icenet, xarray` before clicking **Restart experiment**
-in Jupyter VRE Workflow. TensorFlow Probability 0.23 matches the example's
-TensorFlow 2.15 dependency; newer Probability releases require newer TensorFlow.
-Native libraries installed with `apt-get` need to be
-installed again if the user pod is recreated.
+The first spawn can take several minutes while packages download. Python packages
+persist in `/home/jovyan/.local`; later spawns reuse the installation after checking
+the requirements fingerprint and importing the main dependencies. Native libraries
+are installed again when the pod is recreated. If installation or validation fails,
+the server does not start with an incomplete environment; inspect the pod logs.
+The IceNet example requires Python 3.9–3.11.
+
+The local configuration gives each notebook pod a 2 GiB memory request and an
+8 GiB limit for IceNet training on mc-a4 (20 GiB allocated to Minikube). After
+changing these values, stop and start the user server to recreate its pod; a
+Hub restart alone does not change the resources of existing user pods.
 
 ##### 2.2 Other notebooks (WIP)
 - [Workflow 1](https://github.com/shashikantilager/data-center-characterization) *(Just for reference, please read the instructions to put the data into the `/data/...` folder).*
@@ -135,7 +132,6 @@ Run this entire snippet in **Bash on the gd4 host**, outside Jupyter. Docker, Mi
 **This deletes the Minikube cluster and its notebook volumes, including user files and installed packages. Back up anything you need first.** The host's existing swap configuration remains in place.
 
 ```bash
-(
 set -euo pipefail
 cd /home/goncalo/L1EcoVRE
 
@@ -185,10 +181,9 @@ kubectl apply -f dynamic-nodeport-service/dynamic-nodeport-service.yaml
 
 kubectl get nodes
 kubectl get pods -A
-)
 ```
 
-Then reopen JupyterHub and log in. Your notebook home will be fresh; install `jupyter-vre-workflow` again and restart your Jupyter server before using its telemetry button. Rebuilding does not supply the VM's missing energy counters.
+Then reopen JupyterHub and log in. Your notebook home will be fresh; the local configuration installs `jupyter-vre-workflow` automatically before starting JupyterLab. Rebuilding does not supply the VM's missing energy counters.
 
 ### General infrastructure setup
 

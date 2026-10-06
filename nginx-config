@@ -1,22 +1,94 @@
 # The last configuration file for the Nginx reverse proxy.
 # This file is used to configure the reverse proxy for Grafana and JupyterHub.
-# Temporarily, this is only working with the root `/` path for JupyterHub.
+# JUVRE is served at /lab/juvre/ alongside the existing services.
 
 # Redirect HTTP → HTTPS
 server {
     listen 80;
-    server_name gd4.lab.uvalight.net;
+    server_name mc-a4.lab.uvalight.net;
     return 301 https://$host$request_uri;
 }
 
 # HTTPS vhost
 server {
     listen 443 ssl http2;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    server_name gd4.lab.uvalight.net;
+    server_name mc-a4.lab.uvalight.net;
 
-    ssl_certificate     /etc/letsencrypt/live/gd4.lab.uvalight.net/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/gd4.lab.uvalight.net/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/mc-a4.lab.uvalight.net/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/mc-a4.lab.uvalight.net/privkey.pem;
+    include             /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
+
+    # JUVRE entry point. Exact match leaves other services' paths intact.
+    location = / {
+        return 302 /lab/juvre/;
+    }
+
+    location = /lab/juvre {
+        return 302 /lab/juvre/;
+    }
+
+    location ^~ /lab/juvre/ {
+        # Preserve the prefix configured with hub.baseUrl in Helm.
+        proxy_pass http://192.168.49.2:80;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        "upgrade";
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+        proxy_buffering off;
+        client_max_body_size 0;
+    }
+
+    location ^~ /gd-jupyter/ {
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        "upgrade";
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+        proxy_buffering off;
+
+        proxy_pass http://192.168.49.2:80;
+    }
+
+    location ^~ /gd-cim-api/ {
+        proxy_pass http://localhost:8000;
+        rewrite ^/gd-cim-api(/.*)$ $1 break;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location ^~ /gd-kpi-api/ {
+        proxy_pass http://localhost:8011;
+        rewrite ^/gd-kpi-api(/.*)$ $1 break;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+
+    location ^~ /cnr-sql-adapter {
+       proxy_pass http://localhost:8033;
+       rewrite ^/cnr-sql-adapter(/.*)$ $1 break;
+       proxy_set_header Host            $host;
+       proxy_set_header X-Real-IP       $remote_addr;
+       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+       proxy_set_header X-Forwarded-Proto $scheme;
+    }
 
     location ^~ /grafana/ {
        proxy_pass http://localhost:3000;
@@ -35,7 +107,7 @@ server {
         rewrite ^/prometheus(\/.*)$ $1 break;
     }
 
-    location ^~ /prometheus-shashikant/ {
+        location ^~ /prometheus-shashikant/ {
         proxy_pass http://192.168.49.2:30000/;
         proxy_set_header Host            $host;
         proxy_set_header X-Real-IP       $remote_addr;
@@ -59,7 +131,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location ^~ /prometheus-user-1/ {
+    location ^~ /prometheus-quint/ {
         proxy_pass http://192.168.49.2:30003/;
         proxy_set_header Host            $host;
         proxy_set_header X-Real-IP       $remote_addr;
@@ -75,7 +147,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location ^~ /prometheus-user-2/ {
+    location ^~ /prometheus-ana/ {
         proxy_pass http://192.168.49.2:30005/;
         proxy_set_header Host            $host;
         proxy_set_header X-Real-IP       $remote_addr;
@@ -83,7 +155,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location ^~ /prometheus-user-3/ {
+    location ^~ /prometheus-kilian/ {
         proxy_pass http://192.168.49.2:30006/;
         proxy_set_header Host            $host;
         proxy_set_header X-Real-IP       $remote_addr;
@@ -91,7 +163,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location ^~ /prometheus-user-4/ {
+    location ^~ /prometheus-edouard/ {
         proxy_pass http://192.168.49.2:30007/;
         proxy_set_header Host            $host;
         proxy_set_header X-Real-IP       $remote_addr;
@@ -99,7 +171,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location ^~ /prometheus-user-5/ {
+    location ^~ /prometheus-massimiliano/ {
         proxy_pass http://192.168.49.2:30008/;
         proxy_set_header Host            $host;
         proxy_set_header X-Real-IP       $remote_addr;
@@ -107,7 +179,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location ^~ /prometheus-user-6/ {
+    location ^~ /prometheus-enol/ {
         proxy_pass http://192.168.49.2:30009/;
         proxy_set_header Host            $host;
         proxy_set_header X-Real-IP       $remote_addr;
@@ -115,17 +187,39 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location / {
-        proxy_pass http://192.168.49.2:80/;
-        # proxy_pass http://localhost:8000/;
+    location ^~ /grisc-sa/ {
+        proxy_pass http://localhost:3001;
+        proxy_http_version 1.1;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade           $http_upgrade;
-        proxy_set_header Connection        "upgrade";
-        client_max_body_size               0;
+	proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+	proxy_set_header X-Forwarded-Proto $scheme;
+	proxy_set_header Upgrade	   $http_upgrade;
+	proxy_set_header Connection	   "upgrade";
     }
-}
 
+    location = /grisc-sa {
+        return 301 /grisc-sa/saq;
+    }
+
+    location = /grisc-sa/ {
+        return 301 /grisc-sa/saq;
+    }
+
+    location ^~ /grissa/ {
+
+     proxy_pass http://127.0.0.1:3000;
+     proxy_http_version 1.1;
+     proxy_set_header Host              $host;
+     proxy_set_header X-Real-IP         $remote_addr;
+     proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+     proxy_set_header X-Forwarded-Proto $scheme;
+     proxy_set_header Upgrade           $http_upgrade;
+     proxy_set_header Connection        "upgrade";
+     }
+
+     location = /grissa {
+      return 301 /grissa/saq;
+     }
+
+}

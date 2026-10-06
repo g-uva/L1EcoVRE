@@ -3,6 +3,7 @@ proxy:
     enabled: false
 
 hub:
+  baseUrl: /lab/juvre/ # just in case we are sharing with other apps
   config:
     JupyterHubCuller:
       enabled: true
@@ -10,8 +11,8 @@ hub:
       every: 6000 # 10 minutes
       concurrency: 10
     Spawner:
-      http_timeout: 180
-      start_timeout: 300
+      # First spawn downloads and installs the example dependencies.
+      http_timeout: 1800
     Authenticator:
       admin_users: &admin_users
         - shashikant
@@ -34,7 +35,6 @@ hub:
         - user-6
     JupyterHub:
       authenticator_class: dummy
-      base_url: "/"
       tornado_settings:
         xheaders: true
       # Revoke any admin role retained by users removed from admin_users.
@@ -80,10 +80,11 @@ hub:
     #   c.NotebookApp.disable_check_xsrf = True
 
 singleuser:
-  # Leave room for the control plane on the small gd4 host.
+  startTimeout: 1800
+  # IceNet training shares the 20 GiB mc-a4 cluster with the control plane.
   memory:
-    guarantee: 512M
-    limit: 1280M
+    guarantee: 2G
+    limit: 8G
   cpu:
     guarantee: 0.1
     limit: 1
@@ -110,7 +111,11 @@ singleuser:
     - bash
     - -c
     - |
-      sudo apt update && sudo apt install -y jq
+      set -euo pipefail
+
+      sudo apt-get update
+      sudo apt-get install -y --no-install-recommends \
+        jq libhdf5-dev libnetcdf-dev libudunits2-0
 
       export PYTHONUSERBASE=/home/jovyan/.local
       export PIP_CACHE_DIR=/home/jovyan/.cache/pip
@@ -173,6 +178,7 @@ singleuser:
 
       packages = [
           ("prometheus_api_client", "prometheus_api_client"),
+          ("jupyter_vre_workflow", "jupyter-vre-workflow==0.1.260"),
       ]
       missing = [package for module, package in packages if importlib.util.find_spec(module) is None]
       if missing:
@@ -194,6 +200,82 @@ singleuser:
       fi
       git config --global --add safe.directory /home/jovyan/icenet-notebook
 
+      # Complete the example environment before accepting notebook requests.
+      # Packages and the successful-install marker persist on the user's PVC.
+      sudo -E -u jovyan /opt/conda/bin/python - <<'PYTHON'
+      import hashlib
+      import json
+      import os
+      from pathlib import Path
+      import shutil
+      import subprocess
+      import sys
+
+      if not (3, 9) <= sys.version_info[:2] < (3, 12):
+          raise RuntimeError("The IceNet example requires Python 3.9–3.11")
+      requirements = Path("/home/jovyan/icenet-notebook/requirements.txt")
+      # Iris 3.11 uses string hashing removed in xxhash 4.
+      compatibility = ["tensorflow-probability==0.23.0", "xxhash==3.8.1"]
+      fingerprint = hashlib.sha256(
+          requirements.read_bytes() + "\n".join(compatibility).encode() + sys.version.encode()
+      ).hexdigest()
+      marker = Path("/home/jovyan/.local/icenet-dependencies.sha256")
+      check = (
+          "import tensorflow, tensorflow_probability, icenet, xarray, netCDF4, cf_units, distributed; "
+          "from icenet.data.sic.mask import Masks; "
+          "from icenet.data.sic.osisaf import SICDownloader; "
+          "from icenet.data.processors.era5 import IceNetERA5PreProcessor; "
+          "from icenet.data.processors.meta import IceNetMetaPreProcessor; "
+          "from icenet.data.processors.osi import IceNetOSIPreProcessor; "
+          "from icenet.data.loaders import IceNetDataLoaderFactory; "
+          "from icenet.data.dataset import IceNetDataSet; "
+          "from icenet.model.train import train_model; "
+          "from icenet.model.predict import predict_forecast; "
+          "from icenet.plotting.video import xarray_to_video; "
+          "from iris.common.metadata import hexdigest; hexdigest('compatibility-check')"
+      )
+      env = dict(os.environ, TF_CPP_MIN_LOG_LEVEL="2")
+      ready = (
+          marker.exists()
+          and marker.read_text().strip() == fingerprint
+          and subprocess.run([sys.executable, "-c", check], env=env).returncode == 0
+      )
+      if not ready:
+          print("Installing IceNet notebook dependencies...", flush=True)
+          subprocess.check_call([
+              sys.executable, "-m", "pip", "install", "--user",
+              "-r", str(requirements), *compatibility,
+          ])
+          subprocess.check_call([sys.executable, "-c", check], env=env)
+          marker.write_text(fingerprint + "\n")
+      print("IceNet notebook environment ready.", flush=True)
+
+      # IPython shell commands do not raise on a failed export. Use a checked
+      # subprocess so the experiment reports the original export failure.
+      notebook = requirements.with_name("notebook.ipynb")
+      document = json.loads(notebook.read_text())
+      old_export = "!icenet_output -m -o ./results/predict custom_run_forecast api_dataset predict_dates.csv"
+      new_export = (
+          "import subprocess\n"
+          "subprocess.run([\n"
+          "    'icenet_output', '-m', '-o', './results/predict',\n"
+          "    'custom_run_forecast', 'api_dataset', 'predict_dates.csv',\n"
+          "], check=True)\n"
+      )
+      changed = False
+      for cell in document["cells"]:
+          if cell["cell_type"] == "code" and "".join(cell["source"]).strip() == old_export:
+              cell["source"] = new_export.splitlines(keepends=True)
+              cell["outputs"] = []
+              cell["execution_count"] = None
+              changed = True
+      if changed:
+          backup = notebook.with_name("notebook.before-checked-export.ipynb")
+          if not backup.exists():
+              shutil.copy2(notebook, backup)
+          notebook.write_text(json.dumps(document, indent=1) + "\n")
+      PYTHON
+
       if [ ! -d /home/jovyan/shashikant-notebook/ ] && [ -d /srv/shashikant-notebook/ ]; then
         mkdir -p /home/jovyan/
         cp -r /srv/shashikant-notebook/ /home/jovyan/shashikant-notebook
@@ -203,7 +285,6 @@ singleuser:
       chmod 0440 /etc/sudoers.d/jovyan
 
       exec start.sh jupyterhub-singleuser
-      export PROJECT_ID=($kubernetes-service)
   
   extraPodConfig:
     automountServiceAccountToken: true
